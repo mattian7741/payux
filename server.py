@@ -1,13 +1,18 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import stripe
+import os
 
 app = Flask(__name__)
 CORS(app)
-# Load OpenAI API key from file
+
+# Load Stripe API key from file
 with open("stripe_key.key", "r") as key_file:
     stripe.api_key = key_file.read().strip()
 
+@app.route('/')
+def serve_index():
+    return send_from_directory('.', 'index.html')
 
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():
@@ -39,4 +44,4 @@ def create_checkout_session():
         return jsonify(error=str(e)), 500
 
 if __name__ == '__main__':
-    app.run(port=8500, debug=True)
+    app.run(host='0.0.0.0', port=8500, debug=True)
