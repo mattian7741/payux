@@ -1,13 +1,15 @@
-version: '3.8'  # You can omit this line if you prefer.
+version: '3.8'
 
 services:
   app:
     build:
       context: .
       dockerfile: Dockerfile
+      args:
+        STRIPE_KEY: ${STRIPE_KEY}  # Pass the build argument
     ports:
       - "8500:8500"  # Map host port 8500 to container port 8500
     volumes:
       - .:/app  # Mount the current directory to /app in the container
     environment:
-      - STRIPE_API_KEY=your_stripe_api_key_here  # Pass environment variables if needed
+      - STRIPE_KEY=${STRIPE_KEY}  # Pass environment variable from host

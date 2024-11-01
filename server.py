@@ -6,9 +6,14 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Load Stripe API key from file
-with open("stripe_key.key", "r") as key_file:
-    stripe.api_key = key_file.read().strip()
+# Load Stripe API key from file or environment variable
+try:
+    with open("stripe_key.key", "r") as key_file:
+        stripe.api_key = key_file.read().strip()
+except FileNotFoundError:
+    stripe.api_key = os.getenv("STRIPE_KEY")
+    if stripe.api_key is None:
+        raise ValueError("Stripe API key not found in file or environment variable.")
 
 @app.route('/')
 def serve_index():
