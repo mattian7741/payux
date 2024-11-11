@@ -11,8 +11,7 @@ process_directory() {
     echo ""
     find "$current_dir" -type f \( \
         -name '*.py' -o -name '*.html' -o -name '*.js' -o -name '*.css' -o \
-        -name '*.yaml' -o -name '*.md' -o -name '*.txt' -o -name '*.sql' -o \
-        -name '*.yml' -o -name 'Dockerfile' \) \
+        -name '*.yaml' -o -name '*.md' -o -name '*.txt' -o -name '*.sql' \) \
         -exec echo "" \; \
         -exec echo "" \; \
         -exec echo "### File: {}" \; \

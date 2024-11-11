@@ -9,7 +9,5 @@ services:
         STRIPE_KEY: ${STRIPE_KEY}  # Pass the build argument
     ports:
       - "8500:8500"  # Map host port 8500 to container port 8500
-    volumes:
-      - .:/app  # Mount the current directory to /app in the container
     environment:
       - STRIPE_KEY=${STRIPE_KEY}  # Pass environment variable from host
