@@ -15,9 +15,14 @@ except FileNotFoundError:
     if stripe.api_key is None:
         raise ValueError("Stripe API key not found in file or environment variable.")
 
-@app.route('/')
+
+@app.route('/index')
 def serve_index():
     return send_from_directory('.', 'index.html')
+
+@app.route('/')
+def serve_wheel():
+    return send_from_directory('.', 'wheel.html')
 
 @app.route('/create-checkout-session', methods=['POST'])
 def create_checkout_session():

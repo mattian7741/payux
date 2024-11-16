@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wheel of Fortune</title>
+    <style>
+        body {
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background-color: #222222;
+            font-family: monospace, sans-serif; /* Use fixed-width sans-serif font */
+        }
+        canvas {
+            position: absolute;
+            top: calc(-1250px * var(--scale)); /* Offset vertically to clip the bottom */
+            left: 50%; /* Center horizontally */
+            transform: translateX(-50%) translateY(50%); /* Correct horizontal alignment */
+        }
+        .slogan {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 10vw; /* Scales with viewport width */
+            font-weight: bold;
+            font-family: impact;
+            color: rgba(255, 255, 255, 0.05); /* Very light text for background effect */
+            white-space: nowrap; /* Prevent text wrapping */
+            z-index: 1; /* Behind other elements */
+            pointer-events: none; /* Prevent interactions */
+        }
+
+        .emoji {
+            position: absolute;
+            top: 10px;
+            left: 50vw - 150px;
+            font-size: 300px;
+            z-index: 9999;
+        }
+        .xxx {
+            position: fixed;
+            bottom: 0;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100vw;
+            height: 40vh;
+            overflow: hidden;
+        }
+        #pointer {
+            position: absolute;
+            top: 0;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+    </style>
+</head>
+<body>
+    <div class="slogan">SPIN TO DONATE</div>
+
+    <!-- Emoji -->
+    <div class="emoji" id="emoji">😐</div>
+    <div id="emotion-display">
+        <span name="emotiontrigger" style="font-size: 36px; font-weight: bold; color: #222;"></span>
+    </div>
+
+    <!-- Wheel and Result -->
+    <div style="position: relative; text-align: center;">
+        <div id="result" style="margin-top: 20px; font-size: 48px; font-weight: bold; color: #333;">
+            <input id="current-number" style="margin-top: 20px; font-size: 48px; font-weight: bold; color: #333; text-align: center;" value="0">
+        </div>
+        <div class="xxx">
+            <canvas id="wheel"></canvas>
+            <div id="pointer" style="
+                position: absolute;
+                top: 0px;
+                left: 50%;
+                width: 0;
+                height: 0;
+                border-left: calc(75px * var(--scale)) solid transparent;
+                border-right: calc(75px * var(--scale)) solid transparent;
+                border-top: calc(200px * var(--scale)) solid rgba(128, 128, 128, 0.5);
+            "></div>
+        </div>
+    </div>
+    <script src="https://js.stripe.com/v3/"></script> <!-- Added Stripe script -->
+    <script>
+        const stripe = Stripe('pk_test_51QDusUGSP1yIKlzSG0NW7E1FCXRTta3dNttFQ6c1x58rhEIEwatq2F8B0hZCHUtrb3cRwzcSCryDdzNGcTlU22As00g8i2SSMB'); // Added Stripe public key
+
+        function finalizeSpin() {
+            const normalizedAngle = angle % FULL_ROTATION;
+            const wedgeIndex = (Math.floor((FULL_ROTATION - normalizedAngle) / sliceAngle) + offset) % totalSlices;
+            const landedSlice = slices[wedgeIndex];
+            const finalValue = parseInt(landedSlice.replace("$", ""), 10) * 100; // Convert to cents
+
+            createCheckoutSession(finalValue); // Redirect to Stripe
+        }
+
+        async function createCheckoutSession(amount) {
+            try {
+                const response = await fetch('/create-checkout-session', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ amount }),
+                });
+
+                const session = await response.json();
+
+                if (session.id) {
+                    await stripe.redirectToCheckout({ sessionId: session.id });
+                } else {
+                    alert('Failed to create checkout session.');
+                }
+            } catch (error) {
+                console.error('Error:', error);
+                alert('An error occurred. Please try again.');
+            }
+        }
+
+
+        const canvas = document.getElementById("wheel");
+        const ctx = canvas.getContext("2d");
+        const OFFSET = 2; // Configurable offset for emoji emotion trigger
+        let lastEmotionUpdate = 0;
+        const emoji = document.getElementById("emoji");
+        const n = 1.0; // Scale factor for the wheel
+        document.documentElement.style.setProperty("--scale", n);
+
+        // Set canvas size based on scale
+        canvas.width = 2500 * n;
+        canvas.height = 2500 * n;
+
+
+        function shuffleWithNoAdjacency(wedges) {
+            const result = [];
+            const available = [...wedges]; // Clone the wedges array for modification
+
+            while (available.length > 0) {
+                const current = result[result.length - 1] || null; // Get the last added wedge
+
+                // Filter wedges that are not the same as the last one
+                const choices = available.filter(w => w !== current);
+
+                // If no valid choices remain, restart the shuffle
+                if (choices.length === 0) {
+                    return shuffleWithNoAdjacency(wedges);
+                }
+
+                // Randomly pick a valid wedge
+                const choice = choices[Math.floor(Math.random() * choices.length)];
+                result.push(choice);
+
+                // Remove the chosen wedge from the available pool
+                const index = available.indexOf(choice);
+                available.splice(index, 1);
+            }
+
+            return result;
+        }
+
+        const initialSlices = [
+            "$0", "$0", "$0", "$0", "$0", "$0", "$0", "$0",
+            "$1", "$1", "$1", "$1", "$1", "$1", "$1",
+            "$2", "$2", "$2", "$2", "$2", "$2",
+            "$5", "$5", "$5", "$5", "$5",
+            "$10", "$10", "$10", "$10",
+            "$25", "$25", "$25",
+            "$50", "$50",
+            "$100"
+        ];
+
+        const slices = shuffleWithNoAdjacency(initialSlices); // Ensure no adjacent duplicates
+
+
+
+        const totalSlices = slices.length;
+        const sliceAngle = (2 * Math.PI) / totalSlices;
+        const colors = ["#88AAFF", "#FFFFFF"];
+        const FULL_ROTATION = 2 * Math.PI;
+        let angle = 0;
+        let angVel = 0;
+        let spinning = false;
+        const offset = 27;
+
+        function updateEmojiBasedOnValue(value) {
+            if (value === 0) {
+                updateEmoji("ecstatic"); // 0: ecstatic
+            } else if (value === 1) {
+                updateEmoji("happy"); // 1: happy
+            } else if (value === 2) {
+                updateEmoji("mildly_happy"); // 2: mildly happy
+            } else if (value === 5) {
+                updateEmoji("neutral"); // 5: neutral
+            } else if (value === 10) {
+                updateEmoji("unhappy"); // 10: unhappy
+            } else if (value === 25) {
+                updateEmoji("really_upset"); // 25: really upset
+            } else if (value === 50) {
+                updateEmoji("mortified"); // 50: mortified
+            } else if (value === 100) {
+                updateEmoji("rampage"); // 100: rampage
+            }
+        }
+
+        function updateEmoji(state) {
+            const currentTime = Date.now();
+            if (currentTime - lastEmotionUpdate >= 500) {
+                lastEmotionUpdate = currentTime;
+
+                switch (state) {
+                    case "ecstatic":
+                        emoji.textContent = "🤩"; // Ecstatic
+                        break;
+                    case "happy":
+                        emoji.textContent = "😊"; // Happy
+                        break;
+                    case "mildly_happy":
+                        emoji.textContent = "🙂"; // Mildly happy
+                        break;
+                    case "neutral":
+                        emoji.textContent = "😐"; // Neutral
+                        break;
+                    case "unhappy":
+                        emoji.textContent = "😟"; // Unhappy
+                        break;
+                    case "really_upset":
+                        emoji.textContent = "😖"; // Really upset
+                        break;
+                    case "mortified":
+                        emoji.textContent = "😱"; // Mortified
+                        break;
+                    case "rampage":
+                        emoji.textContent = "🤬"; // Rampage
+                        break;
+                    case "anxious":
+                        emoji.textContent = "😰"; // Anxious while spinning
+                        break;
+                    case "relieved":
+                        emoji.textContent = "😌"; // Relieved
+                        break;
+                    default:
+                        emoji.textContent = "😐"; // Default to neutral
+                }
+            }
+        }
+
+
+        function drawWheel() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            const colorMap = {
+                "$0": "#90EE90", // Light green for $0
+                "$1": "#FFFFFF",
+                "$2": "#D3D3D3",
+                "$5": "#ADD8E6",
+                "$10": "#FFFF00",
+                "$25": "#FFA500",
+                "$50": "#FF0000",
+                "$100": "#000000"
+            };
+
+            for (let i = 0; i < totalSlices; i++) {
+                ctx.beginPath();
+                ctx.moveTo(1250 * n, 1250 * n);
+                ctx.arc(1250 * n, 1250 * n, 1250 * n, i * sliceAngle, (i + 1) * sliceAngle);
+
+                // Determine the slice color
+                const label = slices[i];
+                ctx.fillStyle = colorMap[label].replace(')', ', 0.5)').replace('rgb', 'rgba') || "rgba(255, 255, 255, 0.5)"; // Default with transparency
+                ctx.fill();
+
+                // Save the current state for text rendering
+                ctx.save();
+                ctx.translate(1250 * n, 1250 * n);
+                ctx.rotate(i * sliceAngle + sliceAngle / 2);
+                ctx.translate(950 * n, 0);
+                ctx.rotate(Math.PI / 2);
+
+                // Set font and text color
+                ctx.textAlign = "center";
+                ctx.font = `${90 * n}px Impact`;
+                if (label === "$50" || label === "$100") {
+                    ctx.fillStyle = "#FFFFFF"; // White font for red and black slices
+                } else {
+                    ctx.fillStyle = "#000000"; // Black font for other slices
+                }
+
+                // Draw the label
+                ctx.fillText(label, 0, -200 * n);
+
+                // Restore to previous state
+                ctx.restore();
+            }
+        }
+
+
+        function spinWheel() {
+            if (spinning) return;
+            spinning = true;
+            angVel = Math.random() * 0.2 + 0.1;
+
+
+            let horizontalDrift = 0;
+            let verticalDrift = 0;
+
+
+
+
+            function animateSpin() {
+                let lastValue = null; // Track the previous value to detect transitions
+
+                if (angVel > 0.0015) {
+                    const dAngle = angVel * 0.5;
+                    angle += dAngle;
+                    angVel *= 0.992;
+
+                    drawRotatedWheel();
+
+                    // Dynamically calculate offset based on angular velocity
+                    const resOffset = angVel * 150; // Smooth offset based on angVel
+                    const normalizedAngle = angle % FULL_ROTATION;
+                    const wedgeIndex = (Math.floor((FULL_ROTATION - normalizedAngle) / sliceAngle) + offset) % totalSlices;
+                    const offsetIndex = (wedgeIndex - Math.round(resOffset) + totalSlices) % totalSlices; // Calculate dynamic offset
+                    const offsetSlice = slices[offsetIndex] || "$0"; // Ensure a fallback value if undefined
+                    const offsetValue = parseInt(offsetSlice.replace("$", ""), 10) || 0; // Parse safely with a fallback
+
+                    // Calculate the horizontal and vertical positions
+                    const left_offset = window.innerWidth / 2 - (resOffset * window.innerWidth / 6) + 3; // Horizontal position
+                    const radius = 1250; // Radius of the wheel
+                    const xangle = 10 * resOffset * (2 * Math.PI / 360); // Convert degrees to radians
+                    const bottom_offset = radius * Math.cos(xangle) - 1000; // Vertical position
+
+                    // Add small independent noise for horizontal and vertical drift
+                    horizontalDrift += (Math.random() * .4) - .2; // Smaller noise to prevent excessive drift
+                    verticalDrift += (Math.random() * .4) - .2;
+
+                    // Apply noise to the calculated positions
+                    // emoji.style.left = `${left_offset + horizontalDrift}px`;
+                    // emoji.style.bottom = `${bottom_offset + verticalDrift}px`;
+
+                    // Detect transitions from high to low values
+                    if (resOffset > 3) {
+                        updateEmoji("anxious"); // Spinning fast
+                    } else {
+                        if (lastValue !== null && lastValue >= 25 && offsetValue < 25) {
+                            updateEmoji("relieved"); // Transition from high to low
+                        } else {
+                            updateEmojiBasedOnValue(offsetValue); // Update emoji based on offset value
+                        }
+                    }
+
+                    // Update the emotion trigger display
+                    document.querySelector("span[name='emotiontrigger']").textContent = offsetValue;
+
+                    lastValue = offsetValue; // Update the last value
+
+                    requestAnimationFrame(animateSpin);
+                } else {
+                    spinning = false;
+                    horizontalDrift = 0; // Reset drift when spin stops
+                    verticalDrift = 0;
+
+                    const normalizedAngle = angle % FULL_ROTATION;
+                    const wedgeIndex = (Math.floor((FULL_ROTATION - normalizedAngle) / sliceAngle) + offset) % totalSlices;
+                    const landedSlice = slices[wedgeIndex];
+                    const finalValue = parseInt(landedSlice.replace("$", ""), 10);
+
+                    // Dynamically calculate final offset based on angular velocity
+                    const resOffset = angVel * 200; // Smooth offset based on angVel
+                    const offsetIndex = (wedgeIndex - Math.round(resOffset) + totalSlices) % totalSlices; // Calculate dynamic offset
+                    const offsetSlice = slices[offsetIndex];
+                    const offsetValue = parseInt(offsetSlice.replace("$", ""), 10);
+
+                    // Update the emotion trigger display
+                    document.querySelector("span[name='emotiontrigger']").textContent = offsetValue;
+
+                    // Final result emoji
+                    updateEmojiBasedOnValue(offsetValue);
+
+                    document.getElementById("current-number").value = finalValue;
+                    finalizeSpin();
+                }
+            }
+
+
+
+
+            requestAnimationFrame(animateSpin);
+        }
+
+        function drawRotatedWheel() {
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.save();
+            ctx.translate(1250 * n, 1250 * n);
+            ctx.rotate(angle % FULL_ROTATION);
+            ctx.translate(-1250 * n, -1250 * n);
+            drawWheel();
+            ctx.restore();
+        }
+
+        drawWheel();
+        document.addEventListener("click", spinWheel);
+    </script>
+</body>
+</html>
