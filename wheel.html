@@ -4,62 +4,103 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Wheel of Fortune</title>
-    <style>
-        body {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-            background-color: #222222;
-            font-family: monospace, sans-serif; /* Use fixed-width sans-serif font */
-        }
-        canvas {
-            position: absolute;
-            top: calc(-1250px * var(--scale)); /* Offset vertically to clip the bottom */
-            left: 50%; /* Center horizontally */
-            transform: translateX(-50%) translateY(50%); /* Correct horizontal alignment */
-        }
-        .slogan {
-            position: absolute;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%);
-            font-size: 5vw; /* Scales with viewport width */
-            font-weight: bold;
-            font-family: impact;
-            color: rgba(255, 255, 255, 0.05); /* Very light text for background effect */
-            white-space: nowrap; /* Prevent text wrapping */
-            z-index: 1; /* Behind other elements */
-            pointer-events: none; /* Prevent interactions */
-        }
+<style>
+    body {
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        align-items: center;
+        height: 100vh;
+        margin: 0;
+        background-color: #222222;
+        font-family: monospace, sans-serif; /* Use fixed-width sans-serif font */
+        position: relative;
+        overflow: hidden;
+    }
 
-        .emoji {
-            position: absolute;
-            top: 10px;
-            left: 50vw - 150px;
-            font-size: 300px;
-            z-index: 9999;
-        }
-        .xxx {
-            position: fixed;
-            bottom: 0;
-            left: 50%;
-            transform: translateX(-50%);
-            width: 100vw;
-            height: 40vh;
-            overflow: hidden;
-        }
-        #pointer {
-            position: absolute;
-            top: 0;
-            left: 50%;
-            transform: translateX(-50%);
-        }
-    </style>
+    .background-disclaimers {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none; /* Prevent interaction with disclaimers */
+        overflow: hidden;
+        z-index: 0; /* Ensure this is behind the wheel */
+    }
+
+    .background-disclaimers div {
+        position: absolute;
+        font-weight: bold;
+        font-family: monospace, sans-serif;
+        white-space: nowrap;
+        opacity: 0.5;
+        color: #333; /* Base color */
+    }
+
+    .slogan {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        font-size: 5vw; /* Scales with viewport width */
+        font-weight: bold;
+        font-family: impact;
+        color: rgba(128, 255, 128, 0.75); /* Very light text for background effect */
+        white-space: nowrap; /* Prevent text wrapping */
+        z-index: 1; /* Place above disclaimers */
+        pointer-events: none; /* Prevent interactions */
+    }
+
+    canvas#wheel {
+        position: absolute;
+        top: calc(-1250px * var(--scale)); /* Offset vertically to clip the bottom */
+        left: 50%; /* Center horizontally */
+        transform: translateX(-50%) translateY(50%); /* Correct horizontal alignment */
+        z-index: 2; /* Ensure this is above the disclaimers */
+    }
+
+    .emoji {
+        position: absolute;
+        top: 10px;
+        left: 50vw - 150px;
+        font-size: 300px;
+        z-index: 3; /* Emoji remains above everything else */
+    }
+
+    .xxx {
+        position: fixed;
+        bottom: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 100vw;
+        height: 40vh;
+        overflow: hidden;
+        z-index: 2;
+    }
+
+    #pointer {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 3; /* Pointer remains above everything else */
+    }
+</style>
+<style>
+    canvas#starfield {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        z-index: 0; /* Ensure it's in the background */
+    }
+</style>
+
 </head>
 <body>
+    <canvas id="starfield"></canvas>
     <div class="slogan">SPIN TO DONATE</div>
 
     <!-- Emoji -->
@@ -87,6 +128,7 @@
             "></div>
         </div>
     </div>
+
     <script src="https://js.stripe.com/v3/"></script> <!-- Added Stripe script -->
     <script>
         const stripe = Stripe('pk_test_51QDusUGSP1yIKlzSG0NW7E1FCXRTta3dNttFQ6c1x58rhEIEwatq2F8B0hZCHUtrb3cRwzcSCryDdzNGcTlU22As00g8i2SSMB'); // Added Stripe public key
@@ -122,8 +164,10 @@
         }
 
 
-        const canvas = document.getElementById("wheel");
-        const ctx = canvas.getContext("2d");
+
+        const wheelCanvas = document.getElementById("wheel"); // For the wheel
+        const wheelCtx = wheelCanvas.getContext("2d");
+
         const OFFSET = 2; // Configurable offset for emoji emotion trigger
         let lastEmotionUpdate = 0;
         const emoji = document.getElementById("emoji");
@@ -131,8 +175,8 @@
         document.documentElement.style.setProperty("--scale", n);
 
         // Set canvas size based on scale
-        canvas.width = 2500 * n;
-        canvas.height = 2500 * n;
+        wheelCanvas.width = 2500 * n;
+        wheelCanvas.height = 2500 * n;
 
 
         function shuffleWithNoAdjacency(wedges) {
@@ -248,12 +292,25 @@
             }
         }
 
+        function drawCurvedText(ctx, text, centerX, centerY, radius, startAngle, spacing) {
+            ctx.save();
+            ctx.translate(centerX, centerY);
+            ctx.rotate(startAngle);
+            for (let i = 0; i < text.length; i++) {
+                ctx.save();
+                ctx.rotate(i * spacing);
+                ctx.translate(0, -radius); // Move out to the radius
+                ctx.fillText(text[i], 0, 0); // Draw character
+                ctx.restore();
+            }
+            ctx.restore();
+        }
 
         function drawWheel() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            wheelCtx.clearRect(0, 0, wheelCanvas.width, wheelCanvas.height);
 
             const colorMap = {
-                "$0": "#90EE90", // Light green for $0
+                "$0": "#90EE90",
                 "$1": "#FFFFFF",
                 "$2": "#D3D3D3",
                 "$5": "#ADD8E6",
@@ -264,37 +321,48 @@
             };
 
             for (let i = 0; i < totalSlices; i++) {
-                ctx.beginPath();
-                ctx.moveTo(1250 * n, 1250 * n);
-                ctx.arc(1250 * n, 1250 * n, 1250 * n, i * sliceAngle, (i + 1) * sliceAngle);
+                wheelCtx.beginPath();
+                wheelCtx.moveTo(1250 * n, 1250 * n);
+                wheelCtx.arc(1250 * n, 1250 * n, 1250 * n, i * sliceAngle, (i + 1) * sliceAngle);
 
                 // Determine the slice color
                 const label = slices[i];
-                ctx.fillStyle = colorMap[label].replace(')', ', 0.5)').replace('rgb', 'rgba') || "rgba(255, 255, 255, 0.5)"; // Default with transparency
-                ctx.fill();
+                wheelCtx.fillStyle = colorMap[label].replace(')', ', 0.5)').replace('rgb', 'rgba') || "rgba(255, 255, 255, 0.5)"; // Default with transparency
+                wheelCtx.fill();
 
                 // Save the current state for text rendering
-                ctx.save();
-                ctx.translate(1250 * n, 1250 * n);
-                ctx.rotate(i * sliceAngle + sliceAngle / 2);
-                ctx.translate(950 * n, 0);
-                ctx.rotate(Math.PI / 2);
+                wheelCtx.save();
+                wheelCtx.translate(1250 * n, 1250 * n);
+                wheelCtx.rotate(i * sliceAngle + sliceAngle / 2);
+                wheelCtx.translate(950 * n, 0);
+                wheelCtx.rotate(Math.PI / 2);
 
                 // Set font and text color
-                ctx.textAlign = "center";
-                ctx.font = `${90 * n}px Impact`;
+                wheelCtx.textAlign = "center";
+                wheelCtx.font = `${90 * n}px Impact`;
                 if (label === "$50" || label === "$100") {
-                    ctx.fillStyle = "#FFFFFF"; // White font for red and black slices
+                    wheelCtx.fillStyle = "#FFFFFF"; // White font for red and black slices
                 } else {
-                    ctx.fillStyle = "#000000"; // Black font for other slices
+                    wheelCtx.fillStyle = "#000000"; // Black font for other slices
                 }
 
                 // Draw the label
-                ctx.fillText(label, 0, -200 * n);
+                wheelCtx.fillText(label, 0, -200 * n);
 
                 // Restore to previous state
-                ctx.restore();
+                wheelCtx.restore();
             }
+
+            // Draw the curved "SPIN TO DONATE" text with updated placement
+            wheelCtx.fillStyle = "rgba(128, 128, 128, 0.5)";
+            wheelCtx.font = "bold 70px Impact";
+
+            // Adjust radius and start angle
+            const adjustedRadius = 1150 * n -150; // 50% increased radius
+            const angularOffset = .25;// Math.PI / 2; // Adjust text to appear at the top
+            const characterSpacing = Math.PI / 80; // Spacing between characters
+
+            // drawCurvedText(ctx, "SPIN TO DONATE", 1250 * n, 1250 * n, adjustedRadius, -angularOffset, characterSpacing);
         }
 
 
@@ -316,7 +384,7 @@
                 if (angVel > 0.0015) {
                     const dAngle = angVel * 0.5;
                     angle += dAngle;
-                    angVel *= 0.992;
+                    angVel *= 0.99;
 
                     drawRotatedWheel();
 
@@ -393,17 +461,199 @@
         }
 
         function drawRotatedWheel() {
-            ctx.clearRect(0, 0, canvas.width, canvas.height);
-            ctx.save();
-            ctx.translate(1250 * n, 1250 * n);
-            ctx.rotate(angle % FULL_ROTATION);
-            ctx.translate(-1250 * n, -1250 * n);
+            wheelCtx.clearRect(0, 0, wheelCanvas.width, wheelCanvas.height);
+            wheelCtx.save();
+            wheelCtx.translate(1250 * n, 1250 * n);
+            wheelCtx.rotate(angle % FULL_ROTATION);
+            wheelCtx.translate(-1250 * n, -1250 * n);
             drawWheel();
-            ctx.restore();
+            wheelCtx.restore();
         }
 
         drawWheel();
         document.addEventListener("click", spinWheel);
     </script>
+<script>
+    const disclaimers = [
+        "Donating gets you nothing",
+        "This is a pointless donation",
+        "You're giving your money away",
+        "No refunds",
+        "All donations are final",
+        "Don't expect a reward",
+        "Spin responsibly",
+        "Why are you doing this?",
+        "This is not tax-deductible",
+        "Proceed at your own risk",
+        "Are you sure?",
+        "Don't do it!",
+        "You might regret this",
+        "Have your credit card handy",
+        "This is a real donation",
+        "You could end up donating zero",
+        "Zero dollars is still a donation",
+        "This won’t give you any perks",
+        "No recognition, just generosity",
+        "Your donation, your call",
+        "A real spin, a real donation",
+        "You’re donating for the fun of it",
+        "Expect nothing, give freely",
+        "This supports absolutely nothing",
+        "Donate without expectations",
+        "Your choice, your spin",
+        "No prizes, just giving",
+        "Generosity without purpose",
+        "Pointless, but real",
+        "A real donation, no return"
+    ];
+
+    function createBackgroundDisclaimers() {
+        const container = document.querySelector('.background-disclaimers'); // Target disclaimers container
+
+        const totalDisclaimers = 150; // Adjust for density
+        const shadesOfGrey = ["#333", "#444", "#555", "#666", "#777"];
+        const fontSizes = [12, 14, 16, 18, 20, 22]; // Range of font sizes
+
+        for (let i = 0; i < totalDisclaimers; i++) {
+            const disclaimer = document.createElement('div');
+            disclaimer.textContent = disclaimers[Math.floor(Math.random() * disclaimers.length)];
+            disclaimer.style.fontSize = `${fontSizes[Math.floor(Math.random() * fontSizes.length)]}px`;
+            disclaimer.style.color = shadesOfGrey[Math.floor(Math.random() * shadesOfGrey.length)];
+            disclaimer.style.top = `${Math.random() * 100}%`;
+            disclaimer.style.left = `${Math.random() * 100}%`;
+
+            // Slight tilt between -5 and 5 degrees
+            const tilt = (Math.random() * 10) - 5;
+            disclaimer.style.transform = `rotate(${tilt}deg)`;
+
+            container.appendChild(disclaimer);
+        }
+    }
+
+    // Call function to create disclaimers
+    // createBackgroundDisclaimers();
+</script>
+
+<script>
+    // Starfield Slogans
+    const slogans = [
+        "Donating gets you nothing",
+        "This is a pointless donation",
+        "You're giving your money away",
+        "No refunds",
+        "All donations are final",
+        "Don't expect a reward",
+        "Spin responsibly",
+        "Why are you doing this?",
+        "This is not tax-deductible",
+        "Proceed at your own risk",
+        "Are you sure?",
+        "Just for fun",
+        "You might regret this",
+        "For entertainment only",
+        "This is a real donation",
+        "You could end up donating zero",
+        "Zero dollars is still a donation",
+        "This won’t give you any perks",
+        "No recognition, just generosity",
+        "Your donation, your call",
+        "A real spin, a real donation",
+        "You’re donating for the fun of it",
+        "Expect nothing, give freely",
+        "This supports absolutely nothing",
+        "Donate without expectations",
+        "Your choice, your spin",
+        "No prizes, just giving",
+        "Generosity without purpose",
+        "Pointless, but real",
+        "A real donation, no return"
+    ];
+
+    const starfieldCanvas = document.getElementById("starfield"); // For starfield
+    const starfieldCtx = starfieldCanvas.getContext("2d");
+
+    // Resize the canvas to fit the screen
+    function resizeCanvas() {
+        starfieldCanvas.width = window.innerWidth;
+        starfieldCanvas.height = window.innerHeight;
+        console.log(`Canvas resized to ${starfieldCanvas.width}x${starfieldCanvas.height}`);
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
+
+
+    const stars = [];
+    const starCount = 30; // Number of slogans as "stars"
+    const centerX = starfieldCanvas.width / 2;
+    const centerY = starfieldCanvas.height / 2;
+
+    // Initialize the stars
+    function initStars() {
+        for (let i = 0; i < starCount; i++) {
+            stars.push(createStar());
+        }
+    }
+
+function createStar() {
+    const slogan = slogans[Math.floor(Math.random() * slogans.length)];
+    return {
+        x: Math.random() * 2 - 1, // Normalized X position
+        y: Math.random() * 2 - 1, // Normalized Y position
+        z: Math.random() * 1000 + 1, // Depth
+        size: Math.random() * 10 + 10, // Random font size
+        tilt: Math.random() * 10 - 5, // Initial random tilt
+        tilt_rot_speed: Math.random() * 0.02 - 0.01, // Initial random rotation speed
+        color: randomColor(), // Random color
+        text: slogan
+    };
+}
+
+    function randomColor() {
+        const shades = ["#333", "#444", "#555", "#666", "#777"];
+        return shades[Math.floor(Math.random() * shades.length)];
+    }
+
+function drawStars() {
+    starfieldCtx.clearRect(0, 0, starfieldCanvas.width, starfieldCanvas.height);
+
+    stars.forEach((star) => {
+        // Move stars closer
+        star.z -= 5;
+        if (star.z <= 0) {
+            Object.assign(star, createStar());
+            star.z = 1000;
+        }
+
+        // Add noise to the rotation speed and update tilt
+        star.tilt_rot_speed += Math.random() * 0.04 - 0.02; // Add small random noise to rotation speed
+        star.tilt += star.tilt_rot_speed; // Apply the updated rotation speed to tilt
+
+        // Calculate screen position
+        const scale = 500 / star.z;
+        const x = centerX + star.x * starfieldCanvas.width * scale;
+        const y = centerY + star.y * starfieldCanvas.height * scale;
+
+        // Draw the slogan
+        const fontSize = star.size * scale;
+        starfieldCtx.save();
+        starfieldCtx.translate(x, y);
+        starfieldCtx.rotate((star.tilt * Math.PI) / 180); // Apply the updated tilt
+        starfieldCtx.font = `${fontSize}px monospace`;
+        starfieldCtx.fillStyle = star.color;
+        starfieldCtx.fillText(star.text, 0, 0);
+        starfieldCtx.restore();
+    });
+}
+
+
+    function animateStars() {
+        drawStars();
+        requestAnimationFrame(animateStars);
+    }
+
+    initStars();
+    animateStars();
+</script>
+
 </body>
 </html>
